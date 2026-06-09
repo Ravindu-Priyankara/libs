@@ -93,18 +93,19 @@ static __always_inline struct auxiliary_map *auxmap_iter__get() {
 static __always_inline void auxmap__preload_event_header(struct auxiliary_map *auxmap,
                                                          uint16_t event_type) {
 
-	#if(LINUX_VERSION_CODE < KERNEL_VERSION(4, 11, 0))
-	struct ppm_evt_hdr hdr = {}; 
 	uint8_t nparams = maps__get_event_num_params(event_type);
-	hdr.ts = maps__get_boot_time() + bpf_ktime_get_boot_ns();
-	hdr.tid = bpf_get_current_pid_tgid() & 0xffffffff;
-	hdr.type = event_type;
-	hdr.nparams = nparams;
-	
+
+	#if(LINUX_VERSION_CODE < KERNEL_VERSION(5, 5, 0))
+	uint64_t ts = maps__get_boot_time() + bpf_ktime_get_boot_ns();
+	uint64_t tid = bpf_get_current_pid_tgid() & 0xffffffff;
+
+	__builtin_memcpy(auxamp->data[offsetof(struct ppm_evt_hdr, ts)], &ts, sizeof(ts));
+	__builtin_memcpy(auxmap->data[offsetof(struct ppm_evt_hdr, tid)], &tid, sizeof(tid));
+	__builtin_memcpy(auxmap->data[offsetof(struct ppm_evt_hdr, type)], &event_type, sizeof(event_type));
+	__builtin_memcpy(auxmap->data[offsetof(struct ppm_evt_hdr, nparams)], &nparams, sizeof(nparams));
 
 	#else
 	struct ppm_evt_hdr *hdr = (struct ppm_evt_hdr *)auxmap->data;
-	uint8_t nparams = maps__get_event_num_params(event_type);
 	hdr->ts = maps__get_boot_time() + bpf_ktime_get_boot_ns();
 	hdr->tid = bpf_get_current_pid_tgid() & 0xffffffff;
 	hdr->type = event_type;
