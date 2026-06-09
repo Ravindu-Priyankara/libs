@@ -99,10 +99,10 @@ static __always_inline void auxmap__preload_event_header(struct auxiliary_map *a
 	uint64_t ts = maps__get_boot_time() + bpf_ktime_get_boot_ns();
 	uint64_t tid = bpf_get_current_pid_tgid() & 0xffffffff;
 
-	__builtin_memcpy(auxamp->data[offsetof(struct ppm_evt_hdr, ts)], &ts, sizeof(ts));
-	__builtin_memcpy(auxmap->data[offsetof(struct ppm_evt_hdr, tid)], &tid, sizeof(tid));
-	__builtin_memcpy(auxmap->data[offsetof(struct ppm_evt_hdr, type)], &event_type, sizeof(event_type));
-	__builtin_memcpy(auxmap->data[offsetof(struct ppm_evt_hdr, nparams)], &nparams, sizeof(nparams));
+	__builtin_memcpy(&auxmap->data[offsetof(struct ppm_evt_hdr, ts)], &ts, sizeof(ts));
+	__builtin_memcpy(&auxmap->data[offsetof(struct ppm_evt_hdr, tid)], &tid, sizeof(tid));
+	__builtin_memcpy(&auxmap->data[offsetof(struct ppm_evt_hdr, type)], &event_type, sizeof(event_type));
+	__builtin_memcpy(&auxmap->data[offsetof(struct ppm_evt_hdr, nparams)], &nparams, sizeof(nparams));
 
 	#else
 	struct ppm_evt_hdr *hdr = (struct ppm_evt_hdr *)auxmap->data;
