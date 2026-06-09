@@ -92,12 +92,25 @@ static __always_inline struct auxiliary_map *auxmap_iter__get() {
  */
 static __always_inline void auxmap__preload_event_header(struct auxiliary_map *auxmap,
                                                          uint16_t event_type) {
+
+	#if(LINUX_VERSION_CODE < KERNEL_VERSION(4, 11, 0))
+	struct ppm_evt_hdr hdr = {}; 
+	uint8_t nparams = maps__get_event_num_params(event_type);
+	hdr.ts = maps__get_boot_time() + bpf_ktime_get_boot_ns();
+	hdr.tid = bpf_get_current_pid_tgid() & 0xffffffff;
+	hdr.type = event_type;
+	hdr.nparams = nparams;
+	
+
+	#else
 	struct ppm_evt_hdr *hdr = (struct ppm_evt_hdr *)auxmap->data;
 	uint8_t nparams = maps__get_event_num_params(event_type);
 	hdr->ts = maps__get_boot_time() + bpf_ktime_get_boot_ns();
 	hdr->tid = bpf_get_current_pid_tgid() & 0xffffffff;
 	hdr->type = event_type;
 	hdr->nparams = nparams;
+	#endif
+
 	auxmap->payload_pos = sizeof(struct ppm_evt_hdr) + nparams * sizeof(uint16_t);
 	auxmap->lengths_pos = sizeof(struct ppm_evt_hdr);
 	auxmap->event_type = event_type;
