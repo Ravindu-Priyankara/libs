@@ -95,9 +95,10 @@ static __always_inline void auxmap__preload_event_header(struct auxiliary_map *a
 
 	uint8_t nparams = maps__get_event_num_params(event_type);
 
-	#if(LINUX_VERSION_CODE < KERNEL_VERSION(5, 5, 0))
+	#if(LINUX_VERSION_CODE >= KERNEL_VERSION(5, 5, 0))
 	uint64_t ts = maps__get_boot_time() + bpf_ktime_get_boot_ns();
-	uint64_t tid = bpf_get_current_pid_tgid() & 0xffffffff;
+	uint64_t tid = bpf_get_current_pid_tgid();
+	tid &= 0xffffffff;
 
 	__builtin_memcpy(&auxmap->data[offsetof(struct ppm_evt_hdr, ts)], &ts, sizeof(ts));
 	__builtin_memcpy(&auxmap->data[offsetof(struct ppm_evt_hdr, tid)], &tid, sizeof(tid));
