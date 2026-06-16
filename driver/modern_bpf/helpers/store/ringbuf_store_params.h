@@ -139,13 +139,22 @@ static __always_inline uint32_t ringbuf__reserve_space(struct ringbuf_struct *ri
  * @param ringbuf pointer to the `ringbuf_struct`.
  */
 static __always_inline void ringbuf__store_event_header(struct ringbuf_struct *ringbuf) {
-	struct ppm_evt_hdr *hdr = (struct ppm_evt_hdr *)ringbuf->data;
 	uint8_t nparams = maps__get_event_num_params(ringbuf->event_type);
-	hdr->ts = maps__get_boot_time() + bpf_ktime_get_boot_ns();
-	hdr->tid = bpf_get_current_pid_tgid() & 0xffffffff;
-	hdr->type = ringbuf->event_type;
-	hdr->nparams = nparams;
-	hdr->len = ringbuf->reserved_event_size;
+
+	/*
+	 * Avoid byte-by-byte stores from writing packed header fields directly.
+	 * `struct ppm_evt_hdr` is packed, so field assignments can be lowered to
+	 * byte stores. By building the header as a local value and copying it with
+	 * __builtin_memcpy, clang can lower the copy into wider stores at naturally
+	 * aligned destination offsets (ts/tid/type/len).
+	 */
+	struct ppm_evt_hdr hdr = {0};
+	hdr.ts = maps__get_boot_time() + bpf_ktime_get_boot_ns();
+	hdr.tid = bpf_get_current_pid_tgid() & 0xffffffff;
+	hdr.type = ringbuf->event_type;
+	hdr.nparams = nparams;
+	hdr.len = ringbuf->reserved_event_size;
+	__builtin_memcpy(&ringbuf->data[0], &hdr, sizeof(struct ppm_evt_hdr));
 
 	ringbuf->payload_pos = sizeof(struct ppm_evt_hdr) + nparams * sizeof(uint16_t);
 	ringbuf->lengths_pos = sizeof(struct ppm_evt_hdr);
