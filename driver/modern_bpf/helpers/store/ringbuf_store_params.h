@@ -139,22 +139,24 @@ static __always_inline uint32_t ringbuf__reserve_space(struct ringbuf_struct *ri
  * @param ringbuf pointer to the `ringbuf_struct`.
  */
 static __always_inline void ringbuf__store_event_header(struct ringbuf_struct *ringbuf) {
-	uint8_t nparams = maps__get_event_num_params(ringbuf->event_type);
+	uint64_t ts = maps__get_boot_time() + bpf_ktime_get_boot_ns();
+	uint32_t ts_lo = (uint32_t)(ts & 0xffffffff);
+	uint32_t ts_hi = (uint32_t)(ts >> 32);
+	*(uint32_t *)(ringbuf->data + offsetof(struct ppm_evt_hdr, ts)) = ts_lo;
+	*(uint32_t *)(ringbuf->data + (offsetof(struct ppm_evt_hdr, ts) + 4)) = ts_hi;
 
-	/*
-	 * Avoid byte-by-byte stores from writing packed header fields directly.
-	 * `struct ppm_evt_hdr` is packed, so field assignments can be lowered to
-	 * byte stores. By building the header as a local value and copying it with
-	 * __builtin_memcpy, clang can lower the copy into wider stores at naturally
-	 * aligned destination offsets (ts/tid/type/len).
-	 */
-	struct ppm_evt_hdr hdr = {0};
-	hdr.ts = maps__get_boot_time() + bpf_ktime_get_boot_ns();
-	hdr.tid = bpf_get_current_pid_tgid() & 0xffffffff;
-	hdr.type = ringbuf->event_type;
-	hdr.nparams = nparams;
-	hdr.len = ringbuf->reserved_event_size;
-	__builtin_memcpy(&ringbuf->data[0], &hdr, sizeof(struct ppm_evt_hdr));
+	uint32_t tid = (uint32_t)(bpf_get_current_pid_tgid() & 0xffffffff);
+	*(uint32_t *)(ringbuf->data + offsetof(struct ppm_evt_hdr, tid)) = tid;
+	*(uint32_t *)(ringbuf->data + (offsetof(struct ppm_evt_hdr, tid) + 4)) = 0;
+
+	uint32_t len = ringbuf->reserved_event_size;
+	*(uint32_t *)(ringbuf->data + offsetof(struct ppm_evt_hdr, len)) = len;
+
+	uint16_t type = ringbuf->event_type;
+	*(uint16_t *)(ringbuf->data + offsetof(struct ppm_evt_hdr, type)) = type;
+
+	uint32_t nparams = maps__get_event_num_params(ringbuf->event_type);
+	*(uint32_t *)(ringbuf->data + offsetof(struct ppm_evt_hdr, nparams)) = nparams;
 
 	ringbuf->payload_pos = sizeof(struct ppm_evt_hdr) + nparams * sizeof(uint16_t);
 	ringbuf->lengths_pos = sizeof(struct ppm_evt_hdr);
