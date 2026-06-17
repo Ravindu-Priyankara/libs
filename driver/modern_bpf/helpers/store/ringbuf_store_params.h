@@ -134,29 +134,47 @@ static __always_inline uint32_t ringbuf__reserve_space(struct ringbuf_struct *ri
 ////////////////////////////////
 
 /**
+ * @brief Write a 64-bit header field into ringbuf-reserved memory.
+ *
+ * The value is written as two 32-bit stores.
+ */
+static __always_inline void ringbuf__store_header_u64(uint8_t *data, size_t offset, uint64_t val) {
+	*(uint32_t *)(data + offset) = (uint32_t)(val & 0xffffffff);
+	*(uint32_t *)(data + offset + 4) = (uint32_t)(val >> 32);
+}
+
+/**
+ * @brief Write a 32-bit header field into ringbuf-reserved memory.
+ */
+static __always_inline void ringbuf__store_header_u32(uint8_t *data, size_t offset, uint32_t val) {
+	*(uint32_t *)(data + offset) = val;
+}
+
+/**
+ * @brief Write a 16-bit header field into ringbuf-reserved memory.
+ */
+static __always_inline void ringbuf__store_header_u16(uint8_t *data, size_t offset, uint32_t val) {
+	*(uint16_t *)(data + offset) = val;
+}
+
+/**
  * @brief Push the event header inside the ringbuf space.
  *
  * @param ringbuf pointer to the `ringbuf_struct`.
  */
 static __always_inline void ringbuf__store_event_header(struct ringbuf_struct *ringbuf) {
 	uint64_t ts = maps__get_boot_time() + bpf_ktime_get_boot_ns();
-	uint32_t ts_lo = (uint32_t)(ts & 0xffffffff);
-	uint32_t ts_hi = (uint32_t)(ts >> 32);
-	*(uint32_t *)(ringbuf->data + offsetof(struct ppm_evt_hdr, ts)) = ts_lo;
-	*(uint32_t *)(ringbuf->data + (offsetof(struct ppm_evt_hdr, ts) + 4)) = ts_hi;
-
-	uint32_t tid = (uint32_t)(bpf_get_current_pid_tgid() & 0xffffffff);
-	*(uint32_t *)(ringbuf->data + offsetof(struct ppm_evt_hdr, tid)) = tid;
-	*(uint32_t *)(ringbuf->data + (offsetof(struct ppm_evt_hdr, tid) + 4)) = 0;
-
+	uint64_t tid = bpf_get_current_pid_tgid() & 0xffffffff;
 	uint32_t len = ringbuf->reserved_event_size;
-	*(uint32_t *)(ringbuf->data + offsetof(struct ppm_evt_hdr, len)) = len;
-
-	uint16_t type = ringbuf->event_type;
-	*(uint16_t *)(ringbuf->data + offsetof(struct ppm_evt_hdr, type)) = type;
-
 	uint32_t nparams = maps__get_event_num_params(ringbuf->event_type);
-	*(uint32_t *)(ringbuf->data + offsetof(struct ppm_evt_hdr, nparams)) = nparams;
+	uint16_t type = ringbuf->event_type;
+	uint8_t *data = (uint8_t *)ringbuf->data;
+
+	ringbuf__store_header_u64(data, offsetof(struct ppm_evt_hdr, ts), ts);
+	ringbuf__store_header_u64(data, offsetof(struct ppm_evt_hdr, tid), tid);
+	ringbuf__store_header_u32(data, offsetof(struct ppm_evt_hdr, len), len);
+	ringbuf__store_header_u32(data, offsetof(struct ppm_evt_hdr, nparams), nparams);
+	ringbuf__store_header_u16(data, offsetof(struct ppm_evt_hdr, type), type);
 
 	ringbuf->payload_pos = sizeof(struct ppm_evt_hdr) + nparams * sizeof(uint16_t);
 	ringbuf->lengths_pos = sizeof(struct ppm_evt_hdr);
