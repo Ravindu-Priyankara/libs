@@ -139,22 +139,27 @@ static __always_inline uint32_t ringbuf__reserve_space(struct ringbuf_struct *ri
  * The value is written as two 32-bit stores.
  */
 static __always_inline void ringbuf__store_header_u64(uint8_t *data, size_t offset, uint64_t val) {
-	*(uint32_t *)(data + offset) = (uint32_t)(val & 0xffffffff);
-	*(uint32_t *)(data + offset + 4) = (uint32_t)(val >> 32);
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+	*(volatile uint32_t *)(data + offset) = (uint32_t)(val & 0xffffffff);
+	*(volatile uint32_t *)(data + offset + 4) = (uint32_t)(val >> 32);
+#else
+	*(volatile uint32_t *)(data + offset) = (uint32_t)(val >> 32);
+	*(volatile uint32_t *)(data + offset + 4) = (uint32_t)(val & 0xffffffff);
+#endif
 }
 
 /**
  * @brief Write a 32-bit header field into ringbuf-reserved memory.
  */
 static __always_inline void ringbuf__store_header_u32(uint8_t *data, size_t offset, uint32_t val) {
-	*(uint32_t *)(data + offset) = val;
+	*(volatile uint32_t *)(data + offset) = val;
 }
 
 /**
  * @brief Write a 16-bit header field into ringbuf-reserved memory.
  */
-static __always_inline void ringbuf__store_header_u16(uint8_t *data, size_t offset, uint32_t val) {
-	*(uint16_t *)(data + offset) = val;
+static __always_inline void ringbuf__store_header_u16(uint8_t *data, size_t offset, uint16_t val) {
+	*(volatile uint16_t *)(data + offset) = val;
 }
 
 /**
@@ -173,8 +178,8 @@ static __always_inline void ringbuf__store_event_header(struct ringbuf_struct *r
 	ringbuf__store_header_u64(data, offsetof(struct ppm_evt_hdr, ts), ts);
 	ringbuf__store_header_u64(data, offsetof(struct ppm_evt_hdr, tid), tid);
 	ringbuf__store_header_u32(data, offsetof(struct ppm_evt_hdr, len), len);
-	ringbuf__store_header_u32(data, offsetof(struct ppm_evt_hdr, nparams), nparams);
 	ringbuf__store_header_u16(data, offsetof(struct ppm_evt_hdr, type), type);
+	ringbuf__store_header_u32(data, offsetof(struct ppm_evt_hdr, nparams), nparams);
 
 	ringbuf->payload_pos = sizeof(struct ppm_evt_hdr) + nparams * sizeof(uint16_t);
 	ringbuf->lengths_pos = sizeof(struct ppm_evt_hdr);
